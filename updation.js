@@ -57,7 +57,7 @@ const recordUpdate = async () => {
 
 const crossCheckRecords = async (value) => {
   try {
-    const collection = db.collection("finalData");
+    const collection = db.collection("propertyData");
     const querySnapshot = await collection
       .where("listing_id", "==", value["listing_id"])
       .get();
