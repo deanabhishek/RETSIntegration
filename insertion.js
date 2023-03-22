@@ -1,17 +1,18 @@
 const admin = require("firebase-admin");
 const serviceAccount = require("./gobyhomes-qa-firebase-adminsdk-3r0gx-ac944a27b6.json");
+
 const RETS = require("node-rets");
 const fs = require("fs");
 const feildsValues = require("./selected_feild.js");
 const keyMapping = require("./name_change.js");
-const image_list = require("./image_list.js");
 const main_field = require("./main_field.js");
 const addres_field = require("./addres_field.js");
-
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
   databaseURL: "https://gobyhomes-qa.firebaseio.com",
 });
+
+const db = admin.firestore();
 
 const client = RETS.initialize({
   loginUrl: "http://bright-rets.brightmls.com:6103/cornerstone/login",
@@ -21,9 +22,6 @@ const client = RETS.initialize({
   userAgent: "Bright RETS Application/1.0",
   logLevel: "info",
 });
-
-const db = admin.firestore();
-
 const temp = fs.readFileSync("metaDataLookup.json");
 const lookupValues = JSON.parse(temp);
 
@@ -74,12 +72,18 @@ const fetchRecords = async (resource, className, keyMapping) => {
 
     // Format the datetime string without the timezone indicator
     const formattedTime = fortyFiveMinutesAgo.toISOString().slice(0, -1);
-
+    function getTodayDate() {
+      const today = new Date();
+      const year = today.getFullYear();
+      const month = (today.getMonth() + 1).toString().padStart(2, "0");
+      const day = today.getDate().toString().padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
     do {
       const records = await client.search(
         resource,
         className,
-        `(StandardStatus=|Active,Pending,Active Under Contract) AND (ModificationTimestamp=${formattedTime}+)`,
+        `(StandardStatus=|Active,Pending,Active Under Contract) AND (MLSListDate=${getTodayDate()})(ModificationTimestamp=${formattedTime}+)`,
         {
           limit: 500,
           offset,
@@ -133,16 +137,7 @@ const fetchRecords = async (resource, className, keyMapping) => {
               const newField = addres_field[field];
               updatedRecord["address"][newField] = updatedFieldValues.join(",");
             } else {
-              if (image_list.hasOwnProperty(field)) {
-                if (!updatedRecord.hasOwnProperty("image")) {
-                  updatedRecord["image"] = {};
-                }
-                const newField = image_list[field];
-                updatedRecord["image"][newField] = updatedFieldValues.join(",");
-              } else {
-                // None of the above, use the field name as is
-                updatedRecord[field] = updatedFieldValues.join(",");
-              }
+              updatedRecord[field] = updatedFieldValues.join(",");
             }
           }
         }
@@ -180,182 +175,3 @@ const gobyHomes = async () => {
 };
 
 gobyHomes();
-
-const RETS = require("node-rets");
-const fs = require("fs");
-const feildsValues = require("./selected_feild.js");
-const keyMapping = require("./name_change.js");
-const main_field = require("./main_field.js");
-const addres_field = require("./addres_field.js");
-
-exports.retsDataInsertion = functions.pubsub
-  .schedule("* * * * *")
-  .timeZone("America/Los_Angeles")
-  .onRun(() => {
-    console.log("Hello");
-    const client = RETS.initialize({
-      loginUrl: "http://bright-rets.brightmls.com:6103/cornerstone/login",
-      username: "3348441",
-      password: "vUjeyasAmepri7eqehIPhifib",
-      version: "RETS/1.8",
-      userAgent: "Bright RETS Application/1.0",
-      logLevel: "info",
-    });
-    const temp = fs.readFileSync("metaDataLookup.json");
-    const lookupValues = JSON.parse(temp);
-
-    const addRecordsToFirestore = async (records, className) => {
-      try {
-        const collectionRef = db.collection("propertyData");
-        const batchSize = 500; // Set the batch size as per your requirement
-        let batchCount = 0;
-
-        for (let i = 0; i < records.length; i += batchSize) {
-          const batch = db.batch();
-
-          for (let j = i; j < i + batchSize && j < records.length; j++) {
-            const record = records[j];
-            const docRef = collectionRef.doc();
-            batch.set(docRef, {
-              ...record,
-              className,
-            });
-          }
-
-          await batch.commit();
-          batchCount++;
-          console.log(
-            `Successfully added ${batchSize} records to firestore. Batch ${batchCount}`
-          );
-        }
-
-        console.log(
-          `Successfully added all ${records.length} records to firestore.`
-        );
-      } catch (err) {
-        console.error("Error adding records to firestore", err.message);
-        return err;
-      }
-    };
-
-    const fetchRecords = async (resource, className, keyMapping) => {
-      try {
-        let allRecords = [];
-        let offset = 1;
-        let count;
-        const now = new Date();
-        console.log(now);
-
-        // Subtract 45 minutes from the current datetime
-        const fortyFiveMinutesAgo = new Date(now.getTime() - 45 * 60000);
-
-        // Format the datetime string without the timezone indicator
-        const formattedTime = fortyFiveMinutesAgo.toISOString().slice(0, -1);
-        function getTodayDate() {
-          const today = new Date();
-          const year = today.getFullYear();
-          const month = (today.getMonth() + 1).toString().padStart(2, "0");
-          const day = today.getDate().toString().padStart(2, "0");
-          return `${year}-${month}-${day}`;
-        }
-        do {
-          const records = await client.search(
-            resource,
-            className,
-            `(StandardStatus=|Active,Pending,Active Under Contract) AND (MLSListDate=${getTodayDate()})(ModificationTimestamp=${formattedTime}+)`,
-            {
-              limit: 500,
-              offset,
-              Select: feildsValues.join(","),
-            }
-          );
-          allRecords = allRecords.concat(records.Objects);
-
-          count = parseInt(records.TotalCount);
-
-          offset += 500;
-          console.log(count, offset);
-        } while (offset < count);
-        console.log("allRecords", allRecords.length);
-
-        const recordsWithUpdatedFields = allRecords.map((record, key) => {
-          console.log(key);
-          const updatedRecord = {};
-          Object.keys(record).forEach((field) => {
-            const fieldValues = record[field].split(",");
-            const updatedFieldValues = fieldValues.map((value) => {
-              const matchingLookup = lookupValues.find(
-                (lookup) => lookup.MetadataEntryID === value.trim()
-              );
-              if (matchingLookup) {
-                return matchingLookup.LongValue;
-              }
-              return value;
-            });
-
-            // Check if the field name exists in keyMapping
-            if (keyMapping.hasOwnProperty(field)) {
-              if (!updatedRecord.hasOwnProperty("other_data")) {
-                updatedRecord["other_data"] = {};
-              }
-              const newField = keyMapping[field] || field;
-              updatedRecord["other_data"][newField] =
-                updatedFieldValues.join(",");
-            } else {
-              // Check if the field name exists in the main_field
-              if (main_field.hasOwnProperty(field)) {
-                // If it exists in main_field's key, use the value as the new field name
-                const newField = main_field[field];
-                updatedRecord[newField] = updatedFieldValues.join(",");
-              } else {
-                // Check if the field name exists in address_field
-                if (addres_field.hasOwnProperty(field)) {
-                  // If it exists in address_field's key, add it to the array of addresses in updatedRecord
-                  if (!updatedRecord.hasOwnProperty("address")) {
-                    updatedRecord["address"] = {};
-                  }
-                  const newField = addres_field[field];
-                  updatedRecord["address"][newField] =
-                    updatedFieldValues.join(",");
-                } else {
-                  updatedRecord[field] = updatedFieldValues.join(",");
-                }
-              }
-            }
-          });
-          return updatedRecord;
-        });
-
-        await addRecordsToFirestore(recordsWithUpdatedFields, className);
-      } catch (err) {
-        console.error(
-          `Error occurred in fetchRecords function: ${err.message}`
-        );
-        throw err;
-      }
-    };
-
-    const gobyHomes = async () => {
-      try {
-        const loginResponse = await client.login();
-        if (loginResponse) {
-          console.log("Successfully logged in to server");
-        } else {
-          console.log("There was an error connecting to the server");
-          return;
-        }
-
-        const Class = "Property";
-        const Resource = "ALL";
-
-        const records = await fetchRecords(Class, Resource, keyMapping);
-
-        console.log("All records fetched and written successfully!");
-        client.logout();
-      } catch (err) {
-        console.error(`Error occurred in gobyHomes function: ${err.message}`);
-      }
-    };
-
-    gobyHomes();
-  });
