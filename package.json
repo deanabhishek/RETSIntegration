@@ -1,0 +1,25 @@
+{
+  "name": "retsintegration",
+  "version": "1.0.0",
+  "description": "RETS API Integration of data for the Goby Homes",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AnkitAgarwal547/RETSintegration.git"
+  },
+  "author": "Abhishek",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/AnkitAgarwal547/RETSintegration/issues"
+  },
+  "homepage": "https://github.com/AnkitAgarwal547/RETSintegration#readme",
+  "dependencies": {
+    "firebase": "^9.18.0",
+    "firebase-admin": "^11.5.0",
+    "fs": "^0.0.1-security",
+    "node-rets": "^0.2.6"
+  }
+}
