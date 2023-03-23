@@ -54,6 +54,59 @@ const recordUpdate = async () => {
     crossCheckRecords(item);
   });
 };
+const mapRecord = (record, key) => {
+  console.log(key);
+  const updatedRecord = {};
+  Object.keys(record).forEach((field) => {
+    const fieldValues = record[field].split(",");
+    const updatedFieldValues = fieldValues.map((value) => {
+      const matchingLookup = lookupValues.find(
+        (lookup) => lookup.MetadataEntryID === value.trim()
+      );
+      if (matchingLookup) {
+        return matchingLookup.LongValue;
+      }
+
+      return value;
+    });
+    if (keyMapping.hasOwnProperty(field)) {
+      if (!updatedRecord.hasOwnProperty("other_data")) {
+        updatedRecord["other_data"] = {};
+      }
+      const newField = keyMapping[field] || field;
+      updatedRecord["other_data"][newField] = updatedFieldValues.join(",");
+    } else {
+      // Check if the field name exists in the main_field
+      if (main_field.hasOwnProperty(field)) {
+        // If it exists in main_field's key, use the value as the new field name
+        const newField = main_field[field];
+        updatedRecord[newField] = updatedFieldValues.join(",");
+      } else {
+        // Check if the field name exists in address_field
+        if (addres_field.hasOwnProperty(field)) {
+          // If it exists in address_field's key, add it to the array of addresses in updatedRecord
+          if (!updatedRecord.hasOwnProperty("address")) {
+            updatedRecord["address"] = {};
+          }
+          const newField = addres_field[field];
+          updatedRecord["address"][newField] = updatedFieldValues.join(",");
+        } else {
+          if (image_list.hasOwnProperty(field)) {
+            if (!updatedRecord.hasOwnProperty("image")) {
+              updatedRecord["image"] = {};
+            }
+            const newField = image_list[field];
+            updatedRecord["image"][newField] = updatedFieldValues.join(",");
+          } else {
+            // None of the above, use the field name as is
+            updatedRecord[field] = updatedFieldValues.join(",");
+          }
+        }
+      }
+    }
+  });
+  return updatedRecord;
+};
 
 const crossCheckRecords = async (value) => {
   try {
@@ -80,3 +133,5 @@ const crossCheckRecords = async (value) => {
     console.log(error);
   }
 };
+
+module.exports = recordUpdate;

@@ -174,4 +174,4 @@ const gobyHomes = async () => {
   }
 };
 
-gobyHomes();
+module.exports = gobyHomes;
